@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ağaçtaki Asal Elmalar</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(to bottom, #4ea8de, #3a86ff);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 {
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin: 5px 0;
+            font-size: 24px;
+        }
+
+        .info-panel {
+            background: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            gap: 20px;
+            color: #333;
+        }
+
+        .score { color: #2a9d8f; }
+        .lives { color: #e76f51; }
+
+        /* Ağaç Alanı */
+        .game-area {
+            position: relative;
+            width: 500px;
+            height: 450px;
+            background-color: transparent;
+            border-radius: 20px;
+        }
+
+        /* Ağaç Çizimi (CSS ile gövde ve yapraklar) */
+        .tree-trunk {
+            position: absolute;
+            bottom: 0;
+            left: 210px;
+            width: 80px;
+            height: 180px;
+            background: #8b5a2b;
+            border-radius: 10px 10px 0 0;
+            z-index: 1;
+        }
+
+        .tree-leaves {
+            position: absolute;
+            bottom: 150px;
+            left: 50px;
+            width: 400px;
+            height: 280px;
+            background: radial-gradient(circle, #52b788 0%, #2d6a4f 100%);
+            border-radius: 50%;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            z-index: 2;
+        }
+
+        /* Elma Stili */
+        .apple {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #c9184a);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 3;
+            user-select: none;
+            transition: transform 0.1s;
+        }
+
+        .apple::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 20px;
+            width: 4px;
+            height: 8px;
+            background: #5c4033;
+            border-radius: 2px;
+        }
+
+        .apple:hover {
+            transform: scale(1.15);
+        }
+
+        /* Oyun Bitti ve Mesaj Ekranı */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            color: white;
+            text-align: center;
+        }
+
+        #game-over-screen h2 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: #ff6b6b;
+        }
+
+        .restart-btn {
+            background-color: #2b9348;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .restart-btn:hover {
+            background-color: #55a630;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Asal Ağaç</h1>
+    <div style="color: white; font-size: 13px; margin-bottom: 5px;">Sadece <b>Asal Sayılara</b> tıkla! Normal sayılara basarsan veya asal elmalar yok olursa canın gider.</div>
+
+    <div class="info-panel">
+        <div class="score">Puan: <span id="scoreVal">0</span></div>
+        <div class="lives">Can: <span id="livesVal">*****</span></div>
+    </div>
+
+    <!-- Ağaç Alanı -->
+    <div class="game-area" id="gameArea">
+        <div class="tree-trunk"></div>
+        <div class="tree-leaves"></div>
+    </div>
+
+    <!-- Oyun Bitti Ekranı -->
+    <div id="game-over-screen">
+        <h2 id="finalTitle">OYUN BİTTİ</h2>
+        <p id="finalScore" style="font-size: 20px;"></p>
+        <button class="restart-btn" onclick="oyunuBaslat()">Yeniden Başla</button>
+    </div>
+
+    <script>
+        let score = 0;
+        let lives = 3;
+        let gameInterval;
+        let activeApples = [];
+        const gameArea = document.getElementById('gameArea');
+        const scoreVal = document.getElementById('scoreVal');
+        const livesVal = document.getElementById('livesVal');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalTitle = document.getElementById('finalTitle');
+        const finalScore = document.getElementById('finalScore');
+
+        // Asal sayı kontrolü
+        function isPrime(num) {
+            if (num < 2) return false;
+            for (let i = 2; i <= Math.sqrt(num); i++) {
+                if (num % i === 0) return false;
+            }
+            return true;
+        }
+
+        function oyunuBaslat() {
+            // Temizlik
+            gameOverScreen.style.display = "none";
+            document.querySelectorAll('.apple').forEach(el => el.remove());
+            score = 0;
+            lives = 3;
+            scoreVal.textContent = score;
+            updateLivesDisplay();
+            activeApples = [];
+
+            clearInterval(gameInterval);
+            // Her 1.5 saniyede bir ağaçta yeni elmalar belirsin
+            gameInterval = setInterval(elmaUret, 1500);
+        }
+
+        function elmaUret() {
+            if (lives <= 0) return;
+
+            // 1 ile 100 arasında rastgele bir sayı seç
+            const num = Math.floor(Math.random() * 100) + 1;
+
+            const apple = document.createElement('div');
+            apple.classList.add('apple');
+            apple.textContent = num;
+
+            // Ağaç yapraklarının sınırları içinde rastgele koordinat belirle (X: 70-350, Y: 40-200)
+            const randomX = Math.floor(Math.random() * 280) + 70;
+            const randomY = Math.floor(Math.random() * 160) + 40;
+
+            apple.style.left = randomX + 'px';
+            apple.style.top = randomY + 'px';
+
+            // Elmaya tıklama olayı
+            apple.addEventListener('click', function() {
+                tikaElma(num, apple);
+            });
+
+            gameArea.appendChild(apple);
+
+            // Elma ekranda 3.5 saniye kalsın, tıklanmazsa yere düşer (kaybolur ve can gider)
+            let timeoutId = setTimeout(() => {
+                if (apple.parentElement) {
+                    apple.remove();
+                    // Eğer yere düşen elma ASAL ise can gitsin (kaçırıldı!)
+                    if (isPrime(num)) {
+                        canAzalt("Asal elmayı kaçırdın!");
+                    }
+                }
+            }, 3500);
+
+            apple.dataset.timeout = timeoutId;
+        }
+
+        function tikaElma(num, appleElement) {
+            // Zamanlayıcıyı iptal et
+            clearTimeout(appleElement.dataset.timeout);
+            appleElement.remove();
+
+            if (isPrime(num)) {
+                // Doğru: Asal sayı
+                score += 10;
+                scoreVal.textContent = score;
+            } else {
+                // Yanlış: Normal sayı
+                canAzalt("Normal sayıya tıkladın!");
+            }
+        }
+
+        function canAzalt(reason) {
+            lives--;
+            updateLivesDisplay();
+
+            if (lives <= 0) {
+                bitirOyunu(reason);
+            }
+        }
+
+        function updateLivesDisplay() {
+            let hearts = "";
+            for (let i = 0; i < lives; i++) {
+                hearts += "**";
+            }
+            livesVal.textContent = hearts;
+        }
+
+        function bitirOyunu(reason) {
+            clearInterval(gameInterval);
+            // Kalan tüm elmaları sil
+            document.querySelectorAll('.apple').forEach(el => {
+                clearTimeout(el.dataset.timeout);
+                el.remove();
+            });
+
+            finalTitle.textContent = reason;
+            finalScore.textContent = `Toplam Puanın: ${score}`;
+            gameOverScreen.style.display = "flex";
+        }
+
+        // Oyunu başlat
+        oyunuBaslat();
+    </script>
+</body>
+</html>
